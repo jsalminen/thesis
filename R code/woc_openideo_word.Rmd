@@ -1,0 +1,429 @@
+---
+title: "Wisdom of Crowds at OpenIDEO"
+author: "Juho Salminen"
+date: "22 Apr 2015"
+output:
+  word_document:
+    fig_width: 4
+    fig_height: 3
+---
+
+
+```{r global_options, include=FALSE}
+library(knitr)
+opts_chunk$set(echo=FALSE, warning=FALSE, message=FALSE)
+```
+
+
+```{r, echo=FALSE}
+# Load libraries
+library(ggplot2)
+library(pastecs)
+library(reshape2)
+library(plyr)
+library(gridExtra)
+theme_set(theme_minimal(10))
+
+# Source supporting scripts
+source('Scripts/logisticPseudoR2s.R')
+source('Scripts/chi.stats.R')
+source('Scripts/print_stats.R')
+
+# Load data
+ewaste <- read.csv("../Data/OpenIDEO/Statistics/ewaste_anon.csv", 
+                   header = T, sep = ";")
+
+unemployment <- read.csv("../Data/OpenIDEO/Statistics/unemployment_anon.csv", 
+                         header = T, sep = ";")
+
+celebrate <- read.csv("../Data/OpenIDEO/Statistics/celebrate_anon.csv", 
+                      header = T, sep = ";")
+```
+
+# Munging, merging and data transformations
+```{r}
+# E-waste challenge
+ewaste$ViewsStd <- scale(ewaste$Views)
+ewaste$CommentsStd <- scale(ewaste$Comments)
+ewaste$ApplauseStd <- scale(ewaste$Applause)
+ewaste$OrderStd <- scale(ewaste$Order)
+
+# Unemployment challenge
+unemployment$ViewsStd <- scale(unemployment$Views)
+unemployment$CommentsStd <- scale(unemployment$Comments)
+unemployment$ApplauseStd <- scale(unemployment$Applause)
+unemployment$OrderStd <- scale(unemployment$Order)
+
+# Celebrate challenge
+celebrate$ViewsStd <- scale(celebrate$Views)
+celebrate$CommentsStd <- scale(celebrate$Comments)
+celebrate$ApplauseStd <- scale(celebrate$Applause)
+celebrate$OrderStd <- scale(celebrate$Order)
+
+# Merge data in single data frame
+openideo <- rbind(ewaste, unemployment, celebrate)
+openideo$Challenge <- c(rep("ewaste", nrow(ewaste)),
+                            rep("unemployment", nrow(unemployment)),
+                            rep("celebrate", nrow(celebrate)))
+
+# Fix levels of shortlist variable
+openideo$Shortlist <- as.factor(openideo$Shortlist)
+levels(openideo$Shortlist) <- c("Rejected", "Shortlisted")
+
+openideo_melt <- melt(openideo, 
+                      measure.vars = c("ViewsStd", "CommentsStd", "ApplauseStd", 
+                                       "OrderStd"))
+```
+
+# Summary of the dataset
+```{r}
+cat("E-waste challenge data consists of", dim(ewaste)[1], "observations of", 
+    dim(ewaste)[2], "variables.\n", 
+    "Unemployment challenge data consists of", dim(unemployment)[1], "observations of", 
+    dim(unemployment)[2], "variables.\n",
+    "Business celebration challenge data consists of", dim(celebrate)[1], "observations of", 
+    dim(celebrate)[2], "variables.\n")
+```
+
+Names of variables and a sample of data:
+```{r}
+names(openideo)
+head(openideo)
+str(openideo)
+```
+
+The most interesting thing to explore is the relationship between different variables and selection to shortlist, as this offers an opportunity to compare preferences of the crowd to expert decision.
+
+# Descriptive statistics
+```{r}
+round(stat.desc(openideo[,3:5], norm = T), 3)
+table(openideo$Shortlist)
+cat(round(100 * sum(openideo$Shortlist == "Shortlisted") / nrow(openideo)), 
+    "% of concepts have been selected on the shortlist and", 
+    round(100 * sum(openideo$Winner, na.rm = T) / nrow(openideo)), 
+    "% of concepts are winners.")
+```
+
+Concepts have much more views than comments or applause, which makes sense as it is easier just to view a concept than do something about it. Interestingly statistics on comments and applause are very similar to each other. They have similar ranges, means, medians, standard deviations, sums and even skewness. 20 concepts per challenge have been selected on the shortlist. Acceptance rate is higher than on either Threadless or Quirky.
+
+### Descriptive statistics by challenge
+```{r}
+by(openideo[, c(3:10)], openideo$Challenge, stat.desc, basic = F)
+```
+
+There is some variability between challenges. Celebrating innovative businesses challenge appears to have been the least popular of the three. That challenge is also missing data on what happened after the shortlist selection. This is not a problem, though, as here the focus is on events before the shortlist selection.
+
+### Descriptive statistics by shortlist status
+```{r}
+by(openideo[, c(3:10)], openideo$Shortlist, stat.desc, basic = F)
+```
+
+On average the shortlisted designs gather about the double the amount of views, comments and applause compared to rejected designs. There is also more variance in these statistics among the shortlisted designs than among the rejected designs.
+
+# Distributions of variables
+
+```{r}
+ggplot(openideo) + 
+    geom_histogram(aes(Views), 
+                   fill = "white", color = "black") + 
+    ggtitle("Views") + 
+    ylab("Count")
+
+ggplot(openideo) + 
+    geom_histogram(aes(Views), 
+                   fill = "white", color = "black") + 
+    ggtitle("Views by challenge") + 
+    ylab("Count") + 
+    facet_wrap(~Challenge)
+```
+
+The distribution of views is right-skewed due to natural limit at zero views and no limit at the other end of the scale. The situation is the same both at the aggregate level and within individual challenges.
+
+```{r}
+openideo_temp <- openideo[openideo$Views > 0, ]
+ggplot(openideo_temp) + 
+    geom_histogram(aes(log10(Views), y = ..density..), 
+                   fill = "white", color = "black") + 
+    stat_function(fun = dnorm, 
+                  args = list(mean = mean(log10(openideo_temp$Views), na.rm = T), 
+                              sd = sd(log10(openideo_temp$Views), na.rm=T)), 
+                  colour = 'red', size = 1, linetype = "dashed")
+
+ggplot(openideo_temp) + 
+    geom_histogram(aes(log10(Views), y = ..density..), 
+                   fill = "white", color = "black") + 
+    stat_function(fun = dnorm, 
+                  args = list(mean = mean(log10(openideo_temp$Views), na.rm = T), 
+                              sd = sd(log10(openideo_temp$Views), na.rm=T)), 
+                  colour = 'red', size = 1, linetype = "dashed") + 
+    facet_wrap(~Challenge)
+```
+
+Log-transforming the number of views results in a near-normal distribution for the combined data set, but not for the individual challenges, perhaps due to smaller amount of data.
+
+## Comments
+```{r}
+ggplot(openideo) + 
+    geom_histogram(aes(Comments), 
+                   fill = "white", color = "black") + 
+    ggtitle("Number of comments") + 
+    ylab("Count")
+
+ggplot(openideo) + 
+    geom_histogram(aes(Comments), 
+                   fill = "white", color = "black") + 
+    ggtitle("Number of comments") + 
+    ylab("Count") + 
+    facet_wrap(~Challenge)
+```
+
+Situation is the same with the distribution of number of comments as with the number of views.
+
+```{r}
+openideo_temp <- openideo[openideo$Comments > 0, ]
+
+ggplot(openideo_temp) + 
+    geom_histogram(aes(log10(Comments), y = ..density..), 
+                   fill = "white", color = "black") + 
+    stat_function(fun = dnorm, 
+                  args = list(mean = mean(log10(openideo_temp$Comments), na.rm = T), 
+                              sd = sd(log10(openideo_temp$Comments), na.rm=T)), 
+                  colour = 'red', size = 1, linetype = "dashed")
+
+ggplot(openideo_temp) + 
+    geom_histogram(aes(log10(Comments), y = ..density..), 
+                   fill = "white", color = "black") + 
+    stat_function(fun = dnorm, 
+                  args = list(mean = mean(log10(openideo_temp$Comments), na.rm = T), 
+                              sd = sd(log10(openideo_temp$Comments), na.rm=T)), 
+                  colour = 'red', size = 1, linetype = "dashed") + 
+    facet_wrap(~Challenge)
+```
+
+Log-transformation does not result in normal-looking distribution. This might be problematic in further analysis.
+
+## Applause
+```{r}
+ggplot(openideo) + 
+    geom_histogram(aes(Applause), 
+                   fill = "white", color = "black") + 
+    ggtitle("Number of applause") + 
+    ylab("Count")
+
+ggplot(openideo) + 
+    geom_histogram(aes(Applause), 
+                   fill = "white", color = "black") + 
+    ggtitle("Number of applause") + 
+    ylab("Count") + 
+    facet_wrap(~Challenge)
+```
+
+Distribution of number of applause repeats the familiar shape. In contrast to capped scores used at Threadless the measurements used at OpenIDEO are not limited, which leads to less helpful distributions.
+
+```{r}
+openideo_temp <- openideo[openideo$Applause > 0, ]
+
+ggplot(openideo_temp) + 
+    geom_histogram(aes(log10(Applause), y = ..density..), 
+                   fill = "white", color = "black") + 
+    stat_function(fun = dnorm, 
+                  args = list(mean = mean(log10(openideo_temp$Applause), na.rm = T), 
+                              sd = sd(log10(openideo_temp$Applause), na.rm=T)), 
+                  colour = 'red', size = 1, linetype = "dashed")
+
+ggplot(openideo_temp) + 
+    geom_histogram(aes(log10(Applause), y = ..density..), 
+                   fill = "white", color = "black") + 
+    stat_function(fun = dnorm, 
+                  args = list(mean = mean(log10(openideo_temp$Applause), na.rm = T), 
+                              sd = sd(log10(openideo_temp$Applause), na.rm=T)), 
+                  colour = 'red', size = 1, linetype = "dashed") + 
+    facet_wrap(~Challenge)
+```
+
+Log-transformation does not result in normal distribution. This might be challenging in further analysis.
+
+# Relationships between variables
+```{r}
+ggplot(openideo) + 
+    geom_boxplot(aes(Shortlist, Views)) + 
+    facet_wrap(~Challenge) + 
+    ylab("Number of views") +
+    ggtitle("Shortlist by views")
+
+ggplot(openideo) + 
+    geom_boxplot(aes(Shortlist, Comments)) + 
+    facet_wrap(~Challenge) + 
+    ylab("Number of comments") +
+    ggtitle("Shortlist by comments")
+
+ggplot(openideo) + 
+    geom_boxplot(aes(Shortlist, Applause)) + 
+    facet_wrap(~Challenge) + 
+    ylab("Number of applause") +
+    ggtitle("Shortlist by applause")
+
+ggplot(openideo) + 
+    geom_boxplot(aes(Shortlist, Order)) + 
+    facet_wrap(~Challenge) + 
+    ylab("Deviation") +
+    ggtitle("Shortlist by standardized variables")
+```
+
+In all challenges the shortlisted designs tend to have more views, comments and applause. There also appears to be a small tendency for shortlisted designs to have been submitted earlier in the challenge. Unfortunately data on exact submission dates is not available in the dataset.
+
+# Logistic regression analysis
+```{r}
+sample_size <- floor(0.7*nrow(openideo))
+set.seed(32032488)
+train_ind <- sample(seq_len(nrow(openideo)), size = sample_size)
+train <- openideo[train_ind,]
+test <- openideo[-train_ind,]
+
+model.1 <- glm(Shortlist ~ ApplauseStd + CommentsStd + ViewsStd + OrderStd, 
+               data = train, family = "binomial")
+
+summary(model.1)
+```
+
+When trying to predict the shortlist status based on the standardized number of views, comments, applause and submission order, only the number of views is statistically significant. Therefore, a model containing only the number of views is used.
+
+Correlations between variables:
+```{r}
+cor(train[, c(1, 11, 12, 13)], use = "complete.obs")
+```
+
+There is moderate correlation between variables, further suggesting the most of the information available is already contained in the most significant variable.
+
+```{r}
+model.2 <- glm(Shortlist ~ ViewsStd, data = train, family = "binomial")
+
+# Diagnostic statistics for model 2
+train$predicted.probabilities <- fitted(model.2)
+train$residuals <- resid(model.2)
+train$standardized.residuals <- rstandard(model.2)
+train$studentized.residuals <- rstudent(model.2)
+train$cooks.distance <- cooks.distance(model.2)
+train$dfbeta <- dfbeta(model.2)
+train$dffits <- dffits(model.2)
+train$leverage <- hatvalues(model.2)
+  
+train$large.residuals <- train$standardized.residuals > 2 | 
+    train$standardized.residuals < -2
+train$large.leverage <- train$leverage > 2*(2/nrow(train))
+train$huge.leverage <- train$leverage > 3*(2/nrow(train))
+train$large.cook <- train$cooks.distance > 1
+
+summary(model.2)
+```
+
+In the simpler model the number of views is statistically significant predictor of shortlist status. 
+
+```{r}
+anova(model.1, model.2, test = "Chisq")
+```
+
+The more complex model has slightly smaller residual deviance than the simple model, but because other variables were far from being statistically significant, there is a good change that the more complex model is just fitting the noise. The performance of models is not very different overall.
+
+```{r}
+print_stats(model.2)
+```
+
+The model is clearly better than random baseline model, but the effect size is only moderate, as estimated by the pseudo R^2 statistics. On average, a concept gaining one standard deviation more views in a challenge increases the odds of that concept being selected on the shortlist by a factor of about 3. 
+
+# Model diagnostics
+```{r}
+ggplot(train) + 
+    geom_point(aes(predicted.probabilities, standardized.residuals, 
+                   colour = Shortlist)) +
+    xlab("Predicted probabilities") + 
+    ylab("Standardized residuals") + 
+    ggtitle("Residuals vs. fitted values")
+```
+
+The model makes largest mistakes by missing the concepts that get on the shortlist, similarly to problems with Threadless model. Here the effect is smaller though, presumably due to larger ratio of submissions being selected.
+
+
+```{r}
+ggplot(train) + 
+    stat_qq(aes(sample = standardized.residuals)) + 
+    ggtitle("Normal Q-Q")
+
+ggplot(train) + 
+    stat_qq(aes(sample = standardized.residuals, color = Shortlist)) + 
+    ggtitle("Normal Q-Q")
+```
+
+QQ-plots show the same issue. Because selected concepts are relatively rare, the model tends to predict that nothing is selected, but suffers only small punishments for the mistakes it makes. The predictive performance might be almost trivial.
+
+```{r}
+cat(sum(train$large.residuals), 
+    "observations have residuals larger than 2 standard deviations.\n",
+    sum(train$large.leverage), 
+    "observations have leverage more than 2 times larger than the average.")
+```
+
+Observations with large residuals:
+```{r,echo=FALSE}
+table(train$large.residuals, train$Shortlist)
+```
+
+Most of the observations with large residuals are shortlisted concepts. 
+
+Observations with large leverage:
+```{r,echo=FALSE}
+table(train$large.leverage, train$Shortlist)
+```
+
+With large leverage the pattern is less clear. The shortlisted concepts are still over represented, but not as clearly as with the large residuals.
+
+```{r}
+by(train$ViewsStd[train$large.leverage], train$Shortlist[train$large.leverage], summary)
+by(train$ViewsStd[!train$large.leverage], train$Shortlist[!train$large.leverage], summary)
+```
+
+It is not obvious what causes some observations to have a large leverage.
+
+```{r}
+ggplot(openideo) + 
+    geom_point(aes(Order, ViewsStd, 
+                   color = Shortlist), size = 2.5) +
+    scale_color_manual(values = c('Rejected' = 'gray', 'Shortlisted' = 'red'), 
+                       name = 'Shortlist status', 
+                       labels = c('Rejected', 'Shortlisted')) +
+    geom_point(aes(Order, ViewsStd, color = Shortlist), size = 2.5,
+               subset = .(Shortlist == "Shortlisted")) +
+    scale_x_discrete(breaks = NULL) +
+    #scale_y_discrete(breaks = c(1:5)) + 
+    labs(x = 'Concepts in submission order', y = 'Standardized number of views')+ 
+    ggtitle("All concepts in dataset") + 
+    theme(legend.position = "bottom")
+```
+
+The concepts with least views are rarely selected on the shortlist, but after that the pattern is not clear. Concepts with more than average number of views seem to have quite equal changes of getting on the shortlist. This figure also shows the small trend of older concepts having slightly more views and being selected more often on the shortlist.
+
+# Validation
+
+To validate the model the predicted probabilities between training and test sets are compared. 
+
+```{r, echo=FALSE, fig.width=4.5}
+
+test$predicted.probabilities <- predict(model.2, newdata = test, type = "response")
+
+p1 <- ggplot(train) + 
+    geom_boxplot(aes(Shortlist, predicted.probabilities)) + 
+    ylim(0, 1) + 
+    ylab("Predicted probability") + 
+    xlab("Status") + 
+    ggtitle("Training")
+
+p2 <- ggplot(test) + 
+    geom_boxplot(aes(Shortlist, predicted.probabilities)) + 
+    ylim(0, 1) + 
+    ylab("Predicted probability") + 
+    xlab("Status") + 
+    ggtitle("Test")
+grid.arrange(p1, p2, nrow = 1)
+```
+
+The shortlisted concepts in the test set tend to have higher predicted probabilities than rejected designs, but the model is not accurate enough to discriminate the concepts.

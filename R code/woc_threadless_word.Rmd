@@ -1,0 +1,610 @@
+---
+title: "Wisdom of Crowds at Threadless"
+author: "Juho Salminen"
+date: "22 Apr 2015"
+output: 
+  word_document:
+    fig_width: 4
+    fig_height: 3
+---
+
+
+```{r, echo=FALSE, message=FALSE, results='hide'}
+# Load libraries
+library(ggplot2)
+library(gridExtra)
+library(pastecs)
+library(lsr)
+library(plyr)
+
+theme_set(theme_bw())
+
+# Source supporting scripts
+source('Scripts/logisticPseudoR2s.R')
+source('Scripts/chi.stats.R')
+source('Scripts/print_stats.R')
+source('Scripts/decision_simulator.R')
+source('Scripts/SimPlot2.R')
+
+# Load data
+full_data <- read.csv('../Data/Threadless/Statistics/threadless_data_anon.csv', 
+                      sep = ',', header = T)
+
+# Subset data from Threadless challenge
+threadless <- full_data[full_data$challenge == 'threadless', ]
+
+# Rows with incomplete data
+missing_rows <- threadless[!complete.cases(threadless),]
+
+# Keep only complete cases
+threadless <- threadless[complete.cases(threadless),]
+
+# Keep only the combined printed status and rename the variable
+threadless <- threadless[, c(1:7, 12, 13)]
+names(threadless)[8] <- "printed"
+
+# Change printed status to factor and fix the levels
+threadless$printed <- as.factor(threadless$printed) 
+levels(threadless$printed) <- c("Not printed", "Printed")
+threadless$printed.binary <- 0 
+threadless$printed.binary[threadless$printed == "Printed"] <- 1 
+
+# Change approved date to date format
+threadless$approved_date <- as.Date(threadless$approved_date, "%B %d, %Y")
+```
+
+# Summary of the dataset
+```{r, echo=FALSE}
+cat("Dataset consists of", dim(threadless)[1], "observations of", 
+    dim(threadless)[2], "variables.\n", 
+    nrow(missing_rows), "rows with missing values have been removed.")
+```
+
+Names of the variables and a sample of data:
+```{r,echo=FALSE}
+names(threadless)
+head(threadless)
+```
+
+## Descriptive statistics
+```{r,echo=FALSE}
+summary(threadless[,c(4:8)])
+stat.desc(threadless[,c(4:8)], basic = F)
+threadless[threadless$fives < 0,]
+cat(round(100 * sum(threadless$printed == "Printed") / nrow(threadless), 2), 
+    "% of designs have been printed.")
+```
+
+Average score of designs varies between 1.55 and 4.69, close to smallest and 
+largest possible average scores 1 and 5. Numbers of scores, fives and ones 
+are not limited, and indeed some designs have had thousands of people scoring them.
+Fives have an outlier: for some reason one of the values is negative. Only a small 
+minority of designs in the data have been printed.
+
+## Descriptive statistics by print status
+```{r,echo=FALSE}
+by(threadless[, c(4:7)], threadless$printed, summary)
+```
+
+Printed designs tend to have higher average scores: mean 3.2 for printed desings 
+vs. 2.75 for designs that have not been printed. Numbers of scores and fives 
+are also a little higher compared to designs that have not been printed.
+
+# Distributions of single variables
+
+```{r, echo=FALSE}
+ggplot(threadless) +
+    geom_histogram(aes(avg.score, y = ..density..), binwidth = 0.1, 
+                   colour = 'Black', fill = 'White') + 
+    labs(x = 'Average score', y = 'Density') +
+    ggtitle("Average score") +
+    geom_density(aes(avg.score), size = 1) +
+    geom_vline(aes(xintercept=mean(avg.score, na.rm = T)), 
+               colour = 'red', linetype = 'dashed', size = 1) +
+    stat_function(fun = dnorm, 
+                  args = list(mean = mean(threadless$avg.score, na.rm = T), 
+                              sd = sd(threadless$avg.score, na.rm=T)), 
+                  colour = 'red', size = 1, linetype = "dashed")
+```
+
+The distribution of average scores (solid black line) appears to follow closely normal distribution with same mean and standard deviations (dashed red line).
+
+```{r, echo=FALSE}
+ggplot(threadless) +
+    geom_histogram(aes(score, y = ..density..), binwidth = 30, 
+                   colour = 'Black', fill = 'White') + 
+    labs(x = 'Number of scores', y = 'Density') +
+    ggtitle("Number of scores") +
+    geom_density(aes(score), size = 1) + 
+    geom_vline(aes(xintercept=mean(score, na.rm = T)), 
+               colour = 'red', linetype = 'dashed', size = 1) +
+    stat_function(fun = dnorm, 
+                  args = list(mean = mean(threadless$score, na.rm = T), 
+                              sd = sd(threadless$score, na.rm=T)), 
+                  colour = 'red', size = 1, linetype = "dashed") +
+    coord_cartesian(xlim = quantile(threadless$score, c(0, 0.999), na.rm = T))
+```
+
+Distribution of number of scores is right-skewed and does not resemble 
+normal distribution (dashed red line). Median is a better summary than mean for 
+this distribution.
+
+```{r,echo=FALSE, message=FALSE}
+ggplot(threadless) +
+    geom_histogram(aes(log10(score), y = ..density..), 
+                   colour = 'Black', fill = 'White') + 
+    labs(x = 'log10(Number of scores)', y = 'Density') +
+    ggtitle("Log-transformed number of scores") +
+    geom_density(aes(log10(score)), size = 1) + 
+    geom_vline(aes(xintercept=mean(log10(score), na.rm = T)), 
+               colour = 'red', linetype = 'dashed', size = 1) +
+    stat_function(fun = dnorm, 
+                  args = list(mean = mean(log10(threadless$score), na.rm = T), 
+                              sd = sd(log10(threadless$score), na.rm=T)), 
+                  colour = 'red', size = 1, linetype = "dashed") 
+```
+
+Log transformation fixes the skewness and gets the distribution much closer to
+the normal distribution.
+
+## Fives
+```{r,echo=FALSE}
+ggplot(threadless) +
+    geom_histogram(aes(fives, y = ..density..), 
+                   binwidth = 10, colour = 'Black', fill = 'White') + 
+    labs(x = 'Number of fives', y = 'Density') +
+    ggtitle("Number of fives") +
+    geom_density(aes(fives), size = 1) + 
+    geom_vline(aes(xintercept=mean(fives, na.rm = T)), 
+               colour = 'red', linetype = 'dashed', size = 1) +
+    stat_function(fun = dnorm, 
+                  args = list(mean = mean(threadless$fives, na.rm = T), 
+                              sd = sd(threadless$fives, na.rm=T)), 
+                  colour = 'red', size = 1, linetype = "dashed") +
+    coord_cartesian(xlim = quantile(threadless$fives, c(0, 0.998), na.rm = T))
+```
+
+Distribution of number of fives is also right-skewed and does not follow 
+normal distribution.
+
+```{r,echo=FALSE, message=FALSE}
+# Remove zeros and smaller values for valid log tranformations
+threadless_temp <- threadless[threadless$fives > 0, ]
+ggplot(threadless_temp) +
+    geom_histogram(aes(log10(fives), y = ..density..), 
+                   colour = 'Black', fill = 'White') + 
+    labs(x = 'log10(Number of fives)', y = 'Density') +
+    ggtitle("Log-transformed number of fives") +
+    geom_density(aes(log10(fives)), size = 1) + 
+    geom_vline(aes(xintercept=mean(log10(threadless_temp$fives), na.rm = T)), 
+               colour = 'red', linetype = 'dashed', size = 1) +
+    stat_function(fun = dnorm, 
+                  args = list(mean = mean(log10(threadless_temp$fives), na.rm = T), 
+                              sd = sd(log10(threadless_temp$fives), na.rm=T)), 
+                  colour = 'red', size = 1, linetype = "dashed") 
+```
+
+Log transformed data closely resembles a normal distribution
+
+```{r,echo=FALSE}
+ggplot(threadless) +
+    geom_histogram(aes(ones, y = ..density..), 
+                   binwidth = 10, colour = 'Black', fill = 'White') + 
+    labs(x = 'Number of ones', y = 'Density') +
+    ggtitle("Number of ones") +
+    geom_density(aes(ones), size = 1) + 
+    geom_vline(aes(xintercept=mean(ones, na.rm = T)), 
+               colour = 'red', linetype = 'dashed', size = 1) +
+    stat_function(fun = dnorm, 
+                  args = list(mean = mean(threadless$ones, na.rm = T), 
+                              sd = sd(threadless$ones, na.rm=T)), 
+                  colour = 'red', size = 1, linetype = "dashed") +
+    coord_cartesian(xlim = quantile(threadless$ones, c(0, 0.999), na.rm = T))
+```
+
+Similar right-skewed distribution again as with the scores and fives. 
+
+```{r,echo=FALSE, message=FALSE}
+threadless_temp <- threadless[threadless$ones > 0, ]
+ggplot(threadless_temp) +
+    geom_histogram(aes(log10(ones), y = ..density..), 
+                   colour = 'Black', fill = 'White') + 
+    labs(x = 'log10(Number of ones)', y = 'Density') +
+    ggtitle("Log transformed number of ones") +
+    geom_density(aes(log10(ones)), size = 1) + 
+    geom_vline(aes(xintercept=mean(log10(ones), na.rm = T)), 
+               colour = 'red', linetype = 'dashed', size = 1) +
+    stat_function(fun = dnorm, 
+                  args = list(mean = mean(log10(threadless_temp$ones), na.rm = T), 
+                              sd = sd(log10(threadless_temp$ones), na.rm=T)), 
+                  colour = 'red', size = 1, linetype = "dashed")
+```
+
+Log transformed data again resembles normal distribution. If scores, fives or 
+ones are used in further analyses, it is probably best to use them in 
+log transformed formats.
+
+# Relationships between variables
+
+```{r,echo=FALSE, message=FALSE}
+ggplot(threadless) + 
+    geom_histogram(aes(avg.score, fill = printed, 
+                       y = ..density..), position = 'identity', alpha = 0.5) +
+    labs(x = 'Average score', y = 'Density') +
+    ggtitle("Average scores by printed") +
+    scale_fill_manual(name = 'Submission status',
+                      labels = c('Not printed', 'Printed'),
+                      values = c("grey", "red")) + 
+    geom_density(aes(avg.score, fill = as.factor(printed)), alpha = 0.1)
+```
+
+Printed designs have a tendency to have higher average scores than designs 
+that have not been printed, but there's quite a lot of overlap.
+
+```{r,echo=FALSE}
+ggplot(threadless) + 
+    geom_histogram(aes(score, fill = printed, 
+                       y = ..density..),binwidth = 50, position = 'identity', 
+                   alpha = 0.5) +
+    labs(x = 'Number of scores', y = 'Density') +
+    ggtitle("Number of scores by printed") +
+    scale_fill_manual(name = 'Submission status',
+                      labels = c('Not printed', 'Printed'),
+                      values = c("grey", "red")) + 
+    geom_density(aes(score, fill = printed), alpha = 0.1) +
+    coord_cartesian(xlim = quantile(threadless$score, c(0, 0.999), na.rm = T))
+```
+
+Distribution of number of scores is shifted slightly right for printed designs. 
+The difference is small.
+
+```{r,echo=FALSE}
+ggplot(threadless) + 
+    geom_histogram(aes(fives, fill = printed, 
+                       y = ..density..), binwidth = 10, 
+                   position = 'identity', alpha = 0.5) +
+    labs(x = 'Number of fives', y = 'Density') +
+    ggtitle("Number of fives by printed") +
+    scale_fill_manual(name = 'Submission status',
+                      labels = c('Not printed', 'Printed'),
+                      values = c("grey", "red")) + 
+    geom_density(aes(fives, fill = printed), alpha = 0.1) +
+    coord_cartesian(xlim = quantile(threadless$fives, c(0, 0.998), na.rm = T))
+```
+
+Distribution of fives for printed designs has fatter right tail than the 
+distribution for designs that have not been printed. If design gathers more than
+150 fives it appears to have good changes of getting printed.
+
+```{r,echo=FALSE}
+ggplot(threadless) + 
+    geom_histogram(aes(ones, fill = printed, 
+                       y = ..density..), binwidth = 10, 
+                   position = 'identity', alpha = 0.5) +
+    labs(x = 'Number of ones', y = 'Density') +
+    ggtitle("Number of ones by printed") +
+    scale_fill_manual(name = 'Submission status',
+                      labels = c('Not printed', 'Printed'),
+                      values = c("grey", "red")) + 
+    geom_density(aes(ones, fill = printed), alpha = 0.1) +
+    coord_cartesian(xlim = quantile(threadless$ones, c(0, 0.999), na.rm = T))
+```
+
+Distributions for numbers of ones are almost identical for printed and not printed
+designs.
+
+## Boxplots
+```{r,echo=FALSE}
+p1 <- ggplot(threadless) + geom_boxplot(aes(printed, avg.score)) +
+  labs(x = 'Submission status', y = 'Average score') +
+  scale_x_discrete(labels = c('Not printed', 'Printed'))
+
+p2 <- ggplot(threadless) + geom_boxplot(aes(printed, score)) + 
+  labs(x = 'Submission status', y = 'Number of scores') +
+  scale_x_discrete(labels = c('Not printed', 'Printed')) +
+  coord_cartesian(ylim = quantile(threadless$score, c(0, 0.99), na.rm = T))
+
+p3 <- ggplot(threadless) + geom_boxplot(aes(printed, fives)) + 
+  labs(x = 'Submission status', y = 'Number of fives') +
+  scale_x_discrete(labels = c('Not printed', 'Printed')) +
+  coord_cartesian(ylim = quantile(threadless$fives, c(0, 0.995), na.rm = T))
+
+p4 <- ggplot(threadless) + geom_boxplot(aes(printed, ones)) + 
+  labs(x = 'Submission status', y = 'Number of ones') +
+  scale_x_discrete(labels = c('Not printed', 'Printed')) +
+  coord_cartesian(ylim = quantile(threadless$ones, c(0, 0.99), na.rm = T))
+
+grid.arrange(p1, p2, p3, p4, nrow = 2)
+```
+
+Based on the boxplots average score looks like the best predictor of designs
+getting printed. Number of fives is probably the second best, followed by 
+number of scores. Number of ones appears useless in predicting the print status.
+
+# Data transformations
+```{r}
+# Remove rows where variable to be log transformed is 0
+remove <- threadless$score <= 0 | threadless$fives <= 0 | threadless$ones <= 0
+threadless <- threadless[!remove, ]
+cat("Removed", sum(remove), "observations.")
+threadless[remove, c(4:8)]
+
+# Separate number of fives from the average score
+threadless$total <- threadless$avg.score * threadless$score
+threadless$avg.wo5 <- (threadless$total - threadless$fives * 5) / 
+    (threadless$score - threadless$fives)
+
+# Log transform the data as necessary and normalize
+threadless$avg.score.norm <- scale(threadless$avg.score)
+threadless$score.norm <- scale(log10(threadless$score))
+threadless$fives.norm <- scale(log10(threadless$fives))
+threadless$ones.norm <- scale(log10(threadless$ones))
+threadless$avg.wo5.norm <- scale(threadless$avg.wo5)
+```
+
+
+# Logistic regression analysis
+```{r,echo=FALSE}
+# Split dataset to train and test
+sample_size <- floor(0.7*nrow(threadless))
+set.seed(323293)
+train_ind <- sample(seq_len(nrow(threadless)), size = sample_size)
+train <- threadless[train_ind,]
+test <- threadless[-train_ind,]
+
+# Logistic regression model
+model.1 <- glm(printed ~ avg.score, 
+                 data = train, family = binomial())
+
+# Diagnostic statistics for model 1
+train$predicted.probabilities <- fitted(model.1)
+train$residuals <- resid(model.1)
+train$standardized.residuals <- rstandard(model.1)
+train$studentized.residuals <- rstudent(model.1)
+train$cooks.distance <- cooks.distance(model.1)
+train$dfbeta <- dfbeta(model.1)
+train$dffits <- dffits(model.1)
+train$leverage <- hatvalues(model.1)
+  
+train$large.residuals <- train$standardized.residuals > 2 | 
+    train$standardized.residuals < -2
+train$large.leverage <- train$leverage > 2*(2/nrow(train))
+train$huge.leverage <- train$leverage > 3*(2/nrow(train))
+train$large.cook <- train$cooks.distance > 1
+
+summary(model.1)
+```
+
+The model estimates the probabilities of designs being printed based on the
+average score they have gathererd. It is statistically significant. 
+The probability of getting this kind of data by change if there was no 
+statistical effect between average score and design getting printed is 
+practically zero.
+
+```{r, echo=FALSE}
+print_stats(model.1)
+```
+
+Chi-squared test shows the model fits the data significantly better than random 
+change.Pseudo R^2 statistics still suggest that the effect is not very large. The 
+average scores alone cannot explain which designs get printed. The odds ratio of 
+average score is 15.7 with 99 % confidence interval from 9.1 to 27.2. Getting 1 
+unit better average score increases the probability of design getting printed by
+9 to 27 fold. 
+
+## Model diagnostics
+```{r,echo=FALSE}
+ggplot(train) + 
+    geom_point(aes(predicted.probabilities, standardized.residuals, 
+                   colour = printed)) +
+    xlab("Predicted probabilities") + 
+    ylab("Standardized residuals") + 
+    ggtitle("Residuals vs. fitted values")
+```
+
+Designs that have not been printed have relatively low residuals. On the other
+hand printed designs have problematically large residuals. The model does not 
+work well with the designs that do get printed.
+
+```{r,echo=FALSE}
+ggplot(train) + 
+    stat_qq(aes(sample = standardized.residuals)) + 
+    ggtitle("Normal Q-Q")
+
+ggplot(train) + 
+    stat_qq(aes(sample = standardized.residuals, color = printed)) + 
+    ggtitle("Normal Q-Q")
+```
+
+Q-Q plot does not look good either, presumably because of the model's poor 
+performance with printed designs.
+
+```{r,echo=FALSE}
+cat(sum(train$large.residuals), 
+    "observations have residuals larger than 2 standard deviations.\n",
+    sum(train$large.leverage), 
+    "observations have leverage more than 2 times larger than the average.")
+```
+
+Observations with large residuals:
+```{r,echo=FALSE}
+table(train$large.residuals, train$printed)
+```
+
+All cases with problematically large residuals are printed designs.
+
+Observations with large leverage:
+```{r,echo=FALSE}
+table(train$large.leverage, train$printed)
+```
+
+Observations with large leverage on the model are more equally distributed 
+among printed and not printed designs.
+
+```{r,echo=FALSE}
+by(train$avg.score[train$large.leverage], train$printed[train$large.leverage], 
+   summary)
+by(train$avg.score[!train$large.leverage], train$printed[!train$large.leverage], 
+   summary)
+```
+
+```{r}
+sum(train$avg.score >= 3.39 & train$printed == "Not printed")
+sum(train$avg.score >= 3.39 & train$printed == "Printed")
+```
+
+Both printed and not printed designs with high scores have large leverage. 
+Perhaps this has something to do with the fact that most of the designs 
+do not get printed.
+
+## Improvements to the model
+```{r,echo=FALSE}
+correlate(threadless[,c(4,5,6,7,16)])
+```
+
+Correlations between variables do not look so large that multicollinearity 
+would be a problem.
+
+```{r}
+# More complex linear regression models. Using normalized and 
+# log transformed variables
+model.2 <- glm(printed ~ avg.score.norm, data = train, family = 'binomial')
+model.3 <- update(model.2, .~. + fives.norm)
+model.4 <- update(model.3, .~. + score.norm)
+summary(model.2)
+summary(model.3)
+summary(model.4)
+anova(model.2, model.3, model.4, test = "Chisq")
+```
+
+After using average score to predict print status adding more variables does not
+improve the model. Neither number of fives or number of scores is statistically 
+significant. Comparing the models using anova further confirms the lack of improvement.
+
+```{r,echo=FALSE}
+# Using average score with fives separated
+model.6 <- glm(printed ~ avg.wo5.norm, data = train, family = 'binomial')
+model.7 <- update(model.6, .~. + fives.norm)
+summary(model.6)
+summary(model.7)
+anova(model.6, model.7, test = "Chisq")
+```
+
+Here the logistic regression is first performed with average score with fives 
+removed and then number of fives is added as a variable. This time the addition
+of number of fives improves the model.
+
+```{r}
+print_stats(model.1)
+print_stats(model.7)
+```
+
+When compared to original model that used only average score, the original model
+has slightly higher pseudo R^2 values. Performance of the original model on the 
+training set could not be improved by adding variables to the model. 
+
+As a conclusion, using average score to predict print status of designs 
+provides the logistic regression model with the best fit.
+
+```{r,echo=FALSE, fig.height=4, fig.width=4.5}
+ggplot(threadless) + 
+    geom_point(aes(approved_date, avg.score, 
+                   color = printed), size = 2.5) +
+    scale_color_manual(values = c('Not printed' = 'gray', 'Printed' = 'red'), 
+                       name = 'Submission status', 
+                       labels = c('Not printed', 'Printed')) +
+    geom_point(aes(approved_date, avg.score, color = printed), size = 2.5,
+               subset = .(printed == "Printed")) +
+    #scale_x_discrete(breaks = NULL) +
+    scale_y_discrete(breaks = c(1:5)) + 
+    labs(x = 'Designs', y = 'Average score')+ 
+    ggtitle("All designs in the dataset") + 
+    theme(legend.position = "bottom")
+```
+
+This graph shows that although there is a tendency for designs with higher 
+average score to get printed more often, it is not possible to categorize them 
+to printed and not printed designs based on the average score. The crowd can 
+predict, but it cannot categorize.
+
+# Evaluating and testing the model
+
+To validate the model the predicted probabilities between training and test sets are compared. 
+
+```{r}
+test$predicted.probabilities <- predict(model.1, newdata = test, type = "response")
+
+mse.train <- mean((train$predicted.probabilities - train$printed.binary)^2)
+mse.test <- mean((test$predicted.probabilities - test$printed.binary)^2)
+````
+Mean squared error for the training set is `r mse.train` and MSE for the test 
+set is `r mse.test`. The difference is minimal, which indicates the model fits the
+training and tests sets equally well.
+
+```{r, fig.width=4.5}
+p1 <- ggplot(train) + 
+    geom_boxplot(aes(printed, predicted.probabilities)) + 
+    ylim(0, 0.25) + 
+    ylab("Predicted probability") + 
+    xlab("Status") + 
+    ggtitle("Training")
+
+p2 <- ggplot(test) + 
+    geom_boxplot(aes(printed, predicted.probabilities)) + 
+    ylim(0, 0.25) + 
+    ylab("Predicted probability") + 
+    xlab("Status") + 
+    ggtitle("Test")
+grid.arrange(p1, p2, nrow = 1)
+```
+
+The printed designs in the test set tend to have higher predicted probabilities than designs that have not been printed.
+
+Next a simple decision making simulation is used to further validate the model. It is assumed the decision makers choose designs to be printed according to probabilities predicted by the model. Decision making on the test set is simulated 10 000 times by assigning each design a random number drawn from a uniform distrtibution. If the number is smaller or equal to predicted probability, the design is printed. Number of 
+printed designs and mean average score and standard deviation of printed designs is
+stored and compared to the actual observed values and results of baseline decision
+making simulation. In baseline simulation each design is given equal probability 
+of getting printed based on the probability of randomly selected design being printed 
+in the training set (number of printed designs in training set / number of design in training set).
+```{r, echo=FALSE, fig.height=5}
+test$predicted.probabilities <- predict(model.1, newdata = test, type = 'response')
+simulation_results <- simulation(test, 10000)
+baseline_results <- baseline(train, test, 10000)
+p1 <- SimPlotPrints(test, simulation_results, "Model")
+p2 <- SimPlotPrints(test, baseline_results, "Baseline")
+grid.arrange(p1, p2, nrow = 2)
+```
+
+Both model and baseline simulation tend to produce the similar numbers of printed 
+designs as actually observed, which indicates the ratio of designs chosen to be 
+printed is similar in training and test sets.
+
+```{r, echo=FALSE}
+train_ratio = round(sum(train$printed == "Printed") / nrow(train), 4)
+test_ratio = round(sum(test$printed == "Printed") / nrow(test), 4)
+cat("Ratio of printed designs in training set is ", train_ratio, "\n", 
+    "Ratio of printed designs in test set is ", test_ratio)
+```
+
+This is indeed the case.
+
+```{r, echo=FALSE, fig.height=5}
+p3 <- SimPlotScore(test, simulation_results, "Model")
+p4 <- SimPlotScore(test, baseline_results, "Baseline")
+grid.arrange(p3, p4, nrow = 2)
+```
+
+Mean average score of printed designs in model simulation are centered around 
+the actually observed mean average score. Baseline simulation never gets the correct value.
+Model is thus much better fit to the data than the baseline.
+
+```{r,echo=FALSE, fig.height=5}
+p5 <- SimPlotSD(test, simulation_results, "Model")
+p6 <- SimPlotSD(test, baseline_results, "Baseline")
+grid.arrange(p5, p6, nrow = 2)
+```
+
+Regarding the standard deviation of average scores of printed designs the model 
+simulation fares slightly better than the baseline simulation. It appears that 
+in reality there is more variation in scores of printed designs than the decision 
+making simulation typically generates.
