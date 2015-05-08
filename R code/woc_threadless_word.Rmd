@@ -100,14 +100,14 @@ ggplot(threadless) +
     ggtitle("Average score") +
     geom_density(aes(avg.score), size = 1) +
     geom_vline(aes(xintercept=mean(avg.score, na.rm = T)), 
-               colour = 'red', linetype = 'dashed', size = 1) +
+               colour = 'black', linetype = 'dashed', size = 1) +
     stat_function(fun = dnorm, 
                   args = list(mean = mean(threadless$avg.score, na.rm = T), 
                               sd = sd(threadless$avg.score, na.rm=T)), 
-                  colour = 'red', size = 1, linetype = "dashed")
+                  colour = 'black', size = 1, linetype = "dashed")
 ```
 
-The distribution of average scores (solid black line) appears to follow closely normal distribution with same mean and standard deviations (dashed red line).
+The distribution of average scores (solid black line) appears to follow closely normal distribution with same mean and standard deviations (dashed line).
 
 ```{r, echo=FALSE}
 ggplot(threadless) +
@@ -117,16 +117,16 @@ ggplot(threadless) +
     ggtitle("Number of scores") +
     geom_density(aes(score), size = 1) + 
     geom_vline(aes(xintercept=mean(score, na.rm = T)), 
-               colour = 'red', linetype = 'dashed', size = 1) +
+               colour = 'black', linetype = 'dashed', size = 1) +
     stat_function(fun = dnorm, 
                   args = list(mean = mean(threadless$score, na.rm = T), 
                               sd = sd(threadless$score, na.rm=T)), 
-                  colour = 'red', size = 1, linetype = "dashed") +
+                  colour = 'black', size = 1, linetype = "dashed") +
     coord_cartesian(xlim = quantile(threadless$score, c(0, 0.999), na.rm = T))
 ```
 
 Distribution of number of scores is right-skewed and does not resemble 
-normal distribution (dashed red line). Median is a better summary than mean for 
+normal distribution (dashed line). Median is a better summary than mean for 
 this distribution.
 
 ```{r,echo=FALSE, message=FALSE}
@@ -137,11 +137,11 @@ ggplot(threadless) +
     ggtitle("Log-transformed number of scores") +
     geom_density(aes(log10(score)), size = 1) + 
     geom_vline(aes(xintercept=mean(log10(score), na.rm = T)), 
-               colour = 'red', linetype = 'dashed', size = 1) +
+               colour = 'black', linetype = 'dashed', size = 1) +
     stat_function(fun = dnorm, 
                   args = list(mean = mean(log10(threadless$score), na.rm = T), 
                               sd = sd(log10(threadless$score), na.rm=T)), 
-                  colour = 'red', size = 1, linetype = "dashed") 
+                  colour = 'black', size = 1, linetype = "dashed") 
 ```
 
 Log transformation fixes the skewness and gets the distribution much closer to
@@ -156,11 +156,11 @@ ggplot(threadless) +
     ggtitle("Number of fives") +
     geom_density(aes(fives), size = 1) + 
     geom_vline(aes(xintercept=mean(fives, na.rm = T)), 
-               colour = 'red', linetype = 'dashed', size = 1) +
+               colour = 'black', linetype = 'dashed', size = 1) +
     stat_function(fun = dnorm, 
                   args = list(mean = mean(threadless$fives, na.rm = T), 
                               sd = sd(threadless$fives, na.rm=T)), 
-                  colour = 'red', size = 1, linetype = "dashed") +
+                  colour = 'black', size = 1, linetype = "dashed") +
     coord_cartesian(xlim = quantile(threadless$fives, c(0, 0.998), na.rm = T))
 ```
 
@@ -177,11 +177,11 @@ ggplot(threadless_temp) +
     ggtitle("Log-transformed number of fives") +
     geom_density(aes(log10(fives)), size = 1) + 
     geom_vline(aes(xintercept=mean(log10(threadless_temp$fives), na.rm = T)), 
-               colour = 'red', linetype = 'dashed', size = 1) +
+               colour = 'black', linetype = 'dashed', size = 1) +
     stat_function(fun = dnorm, 
                   args = list(mean = mean(log10(threadless_temp$fives), na.rm = T), 
                               sd = sd(log10(threadless_temp$fives), na.rm=T)), 
-                  colour = 'red', size = 1, linetype = "dashed") 
+                  colour = 'black', size = 1, linetype = "dashed") 
 ```
 
 Log transformed data closely resembles a normal distribution
@@ -194,11 +194,11 @@ ggplot(threadless) +
     ggtitle("Number of ones") +
     geom_density(aes(ones), size = 1) + 
     geom_vline(aes(xintercept=mean(ones, na.rm = T)), 
-               colour = 'red', linetype = 'dashed', size = 1) +
+               colour = 'black', linetype = 'dashed', size = 1) +
     stat_function(fun = dnorm, 
                   args = list(mean = mean(threadless$ones, na.rm = T), 
                               sd = sd(threadless$ones, na.rm=T)), 
-                  colour = 'red', size = 1, linetype = "dashed") +
+                  colour = 'black', size = 1, linetype = "dashed") +
     coord_cartesian(xlim = quantile(threadless$ones, c(0, 0.999), na.rm = T))
 ```
 
@@ -213,11 +213,11 @@ ggplot(threadless_temp) +
     ggtitle("Log transformed number of ones") +
     geom_density(aes(log10(ones)), size = 1) + 
     geom_vline(aes(xintercept=mean(log10(ones), na.rm = T)), 
-               colour = 'red', linetype = 'dashed', size = 1) +
+               colour = 'black', linetype = 'dashed', size = 1) +
     stat_function(fun = dnorm, 
                   args = list(mean = mean(log10(threadless_temp$ones), na.rm = T), 
                               sd = sd(log10(threadless_temp$ones), na.rm=T)), 
-                  colour = 'red', size = 1, linetype = "dashed")
+                  colour = 'black', size = 1, linetype = "dashed")
 ```
 
 Log transformed data again resembles normal distribution. If scores, fives or 
@@ -234,7 +234,7 @@ ggplot(threadless) +
     ggtitle("Average scores by printed") +
     scale_fill_manual(name = 'Submission status',
                       labels = c('Not printed', 'Printed'),
-                      values = c("grey", "red")) + 
+                      values = c("grey", "black")) + 
     geom_density(aes(avg.score, fill = as.factor(printed)), alpha = 0.1)
 ```
 
@@ -250,7 +250,7 @@ ggplot(threadless) +
     ggtitle("Number of scores by printed") +
     scale_fill_manual(name = 'Submission status',
                       labels = c('Not printed', 'Printed'),
-                      values = c("grey", "red")) + 
+                      values = c("grey", "black")) + 
     geom_density(aes(score, fill = printed), alpha = 0.1) +
     coord_cartesian(xlim = quantile(threadless$score, c(0, 0.999), na.rm = T))
 ```
@@ -267,7 +267,7 @@ ggplot(threadless) +
     ggtitle("Number of fives by printed") +
     scale_fill_manual(name = 'Submission status',
                       labels = c('Not printed', 'Printed'),
-                      values = c("grey", "red")) + 
+                      values = c("grey", "black")) + 
     geom_density(aes(fives, fill = printed), alpha = 0.1) +
     coord_cartesian(xlim = quantile(threadless$fives, c(0, 0.998), na.rm = T))
 ```
@@ -285,7 +285,7 @@ ggplot(threadless) +
     ggtitle("Number of ones by printed") +
     scale_fill_manual(name = 'Submission status',
                       labels = c('Not printed', 'Printed'),
-                      values = c("grey", "red")) + 
+                      values = c("grey", "black")) + 
     geom_density(aes(ones, fill = printed), alpha = 0.1) +
     coord_cartesian(xlim = quantile(threadless$ones, c(0, 0.999), na.rm = T))
 ```
@@ -397,6 +397,8 @@ unit better average score increases the probability of design getting printed by
 ggplot(train) + 
     geom_point(aes(predicted.probabilities, standardized.residuals, 
                    colour = printed)) +
+    scale_color_manual(values = c("Not printed" = "gray", "Printed" = "black"), 
+                       name = "Submission status") +
     xlab("Predicted probabilities") + 
     ylab("Standardized residuals") + 
     ggtitle("Residuals vs. fitted values")
@@ -413,6 +415,8 @@ ggplot(train) +
 
 ggplot(train) + 
     stat_qq(aes(sample = standardized.residuals, color = printed)) + 
+    scale_color_manual(values = c("Not printed" = "gray", "Printed" = "black"), 
+                       name = "Submission status")
     ggtitle("Normal Q-Q")
 ```
 
@@ -510,7 +514,7 @@ provides the logistic regression model with the best fit.
 ggplot(threadless) + 
     geom_point(aes(approved_date, avg.score, 
                    color = printed), size = 2.5) +
-    scale_color_manual(values = c('Not printed' = 'gray', 'Printed' = 'red'), 
+    scale_color_manual(values = c('Not printed' = 'gray', 'Printed' = 'black'), 
                        name = 'Submission status', 
                        labels = c('Not printed', 'Printed')) +
     geom_point(aes(approved_date, avg.score, color = printed), size = 2.5,
