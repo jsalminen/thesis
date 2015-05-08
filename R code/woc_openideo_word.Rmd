@@ -147,7 +147,7 @@ ggplot(openideo_temp) +
     stat_function(fun = dnorm, 
                   args = list(mean = mean(log10(openideo_temp$Views), na.rm = T), 
                               sd = sd(log10(openideo_temp$Views), na.rm=T)), 
-                  colour = 'red', size = 1, linetype = "dashed")
+                  colour = 'black', size = 1, linetype = "dashed")
 
 ggplot(openideo_temp) + 
     geom_histogram(aes(log10(Views), y = ..density..), 
@@ -155,7 +155,7 @@ ggplot(openideo_temp) +
     stat_function(fun = dnorm, 
                   args = list(mean = mean(log10(openideo_temp$Views), na.rm = T), 
                               sd = sd(log10(openideo_temp$Views), na.rm=T)), 
-                  colour = 'red', size = 1, linetype = "dashed") + 
+                  colour = 'black', size = 1, linetype = "dashed") + 
     facet_wrap(~Challenge)
 ```
 
@@ -188,7 +188,7 @@ ggplot(openideo_temp) +
     stat_function(fun = dnorm, 
                   args = list(mean = mean(log10(openideo_temp$Comments), na.rm = T), 
                               sd = sd(log10(openideo_temp$Comments), na.rm=T)), 
-                  colour = 'red', size = 1, linetype = "dashed")
+                  colour = 'black', size = 1, linetype = "dashed")
 
 ggplot(openideo_temp) + 
     geom_histogram(aes(log10(Comments), y = ..density..), 
@@ -196,7 +196,7 @@ ggplot(openideo_temp) +
     stat_function(fun = dnorm, 
                   args = list(mean = mean(log10(openideo_temp$Comments), na.rm = T), 
                               sd = sd(log10(openideo_temp$Comments), na.rm=T)), 
-                  colour = 'red', size = 1, linetype = "dashed") + 
+                  colour = 'black', size = 1, linetype = "dashed") + 
     facet_wrap(~Challenge)
 ```
 
@@ -229,7 +229,7 @@ ggplot(openideo_temp) +
     stat_function(fun = dnorm, 
                   args = list(mean = mean(log10(openideo_temp$Applause), na.rm = T), 
                               sd = sd(log10(openideo_temp$Applause), na.rm=T)), 
-                  colour = 'red', size = 1, linetype = "dashed")
+                  colour = 'black', size = 1, linetype = "dashed")
 
 ggplot(openideo_temp) + 
     geom_histogram(aes(log10(Applause), y = ..density..), 
@@ -237,7 +237,7 @@ ggplot(openideo_temp) +
     stat_function(fun = dnorm, 
                   args = list(mean = mean(log10(openideo_temp$Applause), na.rm = T), 
                               sd = sd(log10(openideo_temp$Applause), na.rm=T)), 
-                  colour = 'red', size = 1, linetype = "dashed") + 
+                  colour = 'black', size = 1, linetype = "dashed") + 
     facet_wrap(~Challenge)
 ```
 
@@ -336,6 +336,9 @@ The model is clearly better than random baseline model, but the effect size is o
 ggplot(train) + 
     geom_point(aes(predicted.probabilities, standardized.residuals, 
                    colour = Shortlist)) +
+    scale_color_manual(values = c("Rejected" = "gray", "Shortlisted" = "black"),
+                       name = "Shortlist status", 
+                       labels = c("Rejected", "Shortlisted")) +
     xlab("Predicted probabilities") + 
     ylab("Standardized residuals") + 
     ggtitle("Residuals vs. fitted values")
@@ -351,6 +354,9 @@ ggplot(train) +
 
 ggplot(train) + 
     stat_qq(aes(sample = standardized.residuals, color = Shortlist)) + 
+    scale_color_manual(values = c("Rejected" = "gray", "Shortlisted" = "black"),
+                       name = "Shortlist status", 
+                       labels = c("Rejected", "Shortlisted")) +
     ggtitle("Normal Q-Q")
 ```
 
@@ -388,7 +394,7 @@ It is not obvious what causes some observations to have a large leverage.
 ggplot(openideo) + 
     geom_point(aes(Order, ViewsStd, 
                    color = Shortlist), size = 2.5) +
-    scale_color_manual(values = c('Rejected' = 'gray', 'Shortlisted' = 'red'), 
+    scale_color_manual(values = c('Rejected' = 'gray', 'Shortlisted' = 'black'), 
                        name = 'Shortlist status', 
                        labels = c('Rejected', 'Shortlisted')) +
     geom_point(aes(Order, ViewsStd, color = Shortlist), size = 2.5,
